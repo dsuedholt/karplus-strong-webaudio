@@ -13,27 +13,40 @@ async function play(freq)
 {
     if (!audioCtx) await init();
 
-    period_sec = 1 / freq;
-    period_samp = Math.ceil(fs / freq);
+    let true_period = fs / freq;
  
-    buffer = audioCtx.createBuffer(1, fs, fs);
-    bufferData = buffer.getChannelData(0);
+    const buffer = audioCtx.createBuffer(1, fs, fs);
+    const bufferData = buffer.getChannelData(0);
  
-    for (var i = 0; i < period_samp; i++)
+
+    ksNode = new AudioWorkletNode(audioCtx, 'basic-ks-processor');
+
+    let omegaNorm = 2 * Math.PI * freq / fs; 
+
+    // can replace 0.5 by a stretching factor S, see eq. 22
+    let lowpassPhaseDelay = -Math.atan(-0.5 * Math.sin(omegaNorm) / (0.5 + 0.5 * Math.cos(omegaNorm))) / omegaNorm;
+    let period = Math.floor(true_period - lowpassPhaseDelay - 1e-6);
+    let allpassPhaseDelay = true_period - period - lowpassPhaseDelay;
+    
+    // eq. 16
+    let allpassTuningC = Math.sin(0.5 * omegaNorm - 0.5 * omegaNorm * allpassPhaseDelay) / Math.sin(0.5 * omegaNorm + 0.5 * omegaNorm * allpassPhaseDelay);
+    console.log(allpassTuningC);
+    // eq. 12
+    const allpassTuner = new IIRFilterNode(audioCtx, {feedforward: [allpassTuningC, 1], feedback: [1, allpassTuningC]});
+
+    for (var i = 0; i < period; i++)
     {
         bufferData[i] = (2 * Math.random() - 1);
     }
  
     const source = audioCtx.createBufferSource();
     source.buffer = buffer;
-
-    ksNode = new AudioWorkletNode(audioCtx, 'basic-ks-processor');
-
+    
     source.connect(ksNode);
-    ksNode.connect(audioCtx.destination);
+    ksNode.connect(allpassTuner);
+    allpassTuner.connect(audioCtx.destination);
 
-    const periodParam = ksNode.parameters.get('period');
-    periodParam.setValueAtTime(period_samp, audioCtx.currentTime)
+    ksNode.parameters.get('period').value = period;
 
     source.start();
 }
