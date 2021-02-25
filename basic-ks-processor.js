@@ -24,7 +24,8 @@ class BasicKSProcessor extends AudioWorkletProcessor
     constructor(options)
     {
         super(options);
-        this.buffer = new CircularBuffer(1000);
+        this.lowpassDelayBuf = new CircularBuffer(1000);
+        this.allpassBuf = new CircularBuffer(1000);
         this.bufIdx = 0;
         this.playing = true;
 
@@ -43,6 +44,14 @@ class BasicKSProcessor extends AudioWorkletProcessor
                 maxValue: 20000,
                 automationRate: 'a-rate'
             },
+
+            {
+                name: 'allpassTuningC',
+                defaultValue: 0,
+                minValue: -10,
+                maxValue: 10,
+                automationRate: 'a-rate'
+            }
         ]
     } 
 
@@ -55,8 +64,13 @@ class BasicKSProcessor extends AudioWorkletProcessor
         {
             output[i] = input ? input[i] : 0;
             let period = parameters['period'].length > 1 ? parameters['period'][i] : parameters['period'][0] ;
-            output[i] += 0.995 * (0.5 * this.buffer.read(i + this.bufIdx - period) + 0.5 * this.buffer.read(i + this.bufIdx - period - 1));
-            this.buffer.write(this.bufIdx + i, output[i]);
+            output[i] += 0.995 * (0.5 * this.lowpassDelayBuf.read(i + this.bufIdx - period) + 0.5 * this.lowpassDelayBuf.read(i + this.bufIdx - period - 1));
+            this.lowpassDelayBuf.write(this.bufIdx + i, output[i]);
+
+            let allpassTuningC = parameters['allpassTuningC'].length > 1 ? parameters['allpassTuningC'][i] : parameters['allpassTuningC'][0] ;
+            output[i] = allpassTuningC * output[i] + this.lowpassDelayBuf.read(this.bufIdx + i - 1) - allpassTuningC * this.allpassBuf.read(this.bufIdx + i - 1);
+
+            this.allpassBuf.write(this.bufIdx + i, output[i]);
         }
         this.bufIdx += output.length;
         return this.playing;

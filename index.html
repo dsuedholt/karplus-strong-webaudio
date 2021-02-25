@@ -3,8 +3,9 @@
 <head>
 </head>
 <body>
-    <button onclick="play(800)">play</button>
-    <button onclick="stop()">stop</button>
     <script src="script.js" defer></script>
+    <button onclick="play()">play</button>
+    <button onclick="stop()">stop</button>
+    <input type='range' min='80' max='800' value='400' id='freqSlider' oninput="updateFreq(this.value)">
 </body>
 </html>   
